@@ -1,0 +1,15 @@
+# R session and workspace files
+.Rhistory
+.RData
+.Ruserdata
+
+# Local source data (commit only after licence/provenance review)
+data/MaunaLoa_miss.csv
+
+# Generated analysis outputs
+outputs/*
+!outputs/.gitkeep
+
+# OS/editor files
+.DS_Store
+.Rproj.user/
