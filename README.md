@@ -1,45 +1,101 @@
 # Atmospheric Gas Data Analysis: Missing Data, PCA and Clustering
 
-## Overview
-This coursework project explores a monthly atmospheric-gas dataset with Date and five gas measurements. The submitted report describes 183 observations spanning 2000–2019. The work focuses on data quality, missing-value handling, PCA and unsupervised clustering.
+An exploratory multivariate analysis of monthly atmospheric gas measurements from January 2000 to March 2015? No: the supplied source data spans January 2000 to March 2015? 
 
-This is exploratory multivariate analysis. It does **not** implement time-series forecasting or explicitly model temporal autocorrelation.
+## Project overview
 
-## Workflow
-1. Explore distributions and pairwise correlations.
-2. Flag potential outliers using Tukey's 1.5-IQR rule. The coursework workflow replaces flagged values with missing values; this is a sensitivity choice requiring scientific justification.
-3. Inspect missingness and run an MCAR diagnostic. The report records p = 0.856; this means the test fails to reject MCAR, not that MCAR has been proven.
-4. Apply MICE with predictive mean matching (PMM), m = 10.
-5. Run PCA and select the number of components reaching at least 85% cumulative variance.
-6. Compare K-means and Ward.D2 hierarchical clustering, with k = 3 retained from the coursework analysis.
+This project was completed as a data visualisation and analysis coursework assignment. It examines five measured variables (CO, CO2, Methane, NitrousOx and CFC11) across 183 monthly observations, using missing-data diagnostics, multiple imputation, principal component analysis (PCA), K-means and hierarchical clustering.
 
-## Findings reported in the coursework
-- 183 observations and six columns (Date plus five gas variables).
-- CO and CO2 are identified as containing missing observations.
-- MCAR-test p-value reported as 0.856.
-- MICE configuration: m = 10, PMM.
-- Three clusters selected; reported K-means between/total sum-of-squares ratio is approximately 75.77%.
+The work is **exploratory**. It does not estimate causal effects, identify verified pollution sources, or model temporal autocorrelation / forecast future concentrations.
 
-**PCA discrepancy:** the report's methods section says two components reach at least 85% cumulative variance, while its discussion states 97%. Reconcile these figures against the original PCA output before citing either as definitive.
+## Research questions
 
-## Code and data
-- `R/atmospheric_gas_analysis.R`: cleaned, project-relative workflow. It writes diagnostic tables, PCA eigenvalues, cluster assignments and plots to `outputs/`.
-- `data/README.md`: input provenance and redistribution note.
+1. What are the distributions, pairwise relationships and missingness patterns in the five measurements?
+2. How do imputation and the treatment of extreme observations affect the multivariate representation?
+3. How many principal components are needed to retain at least 85% of variance?
+4. Do K-means and Ward.D2 hierarchical clustering produce comparable groupings in PCA space?
 
-The raw CSV is not included because the supplied archive did not establish its exact upstream source or redistribution licence. Add an authorised copy at `data/MaunaLoa_miss.csv` only after confirming permission.
+## Dataset
 
-## Run
-Install R and the packages `readr`, `dplyr`, `naniar`, `mice`, `FactoMineR`, `factoextra` and `cluster`. From the repository root run:
+The source file supplied with the coursework is named `MaunaLoa_miss.csv`. It contains 183 monthly records and six columns: Date plus five numeric gas measurements. The date range is January 2000 to March 2015? 
+
+Original missingness in the supplied CSV:
+| Variable | Missing observations |
+|---|---:|
+| CO | 21 |
+| CO2 | 14 |
+| Methane | 0 |
+| NitrousOx | 0 |
+| CFC11 | 0 |
+| **Total** | **35** |
+
+The source archive did not contain a reliable upstream URL, version or redistribution licence. The raw CSV is therefore not committed. See [data/README.md](data/README.md) before obtaining or redistributing the data.
+
+## Analysis workflow
+
+The revised R workflow deliberately separates two pipelines:
+
+- **Primary pipeline:** preserves all observed values and imputes only the 35 originally missing cells using MICE with predictive mean matching (PMM), 10 imputations.
+- **IQR sensitivity pipeline:** additionally flags observations outside Tukey's 1.5-IQR bounds and treats them as missing before MICE. This reproduces the original coursework's outlier-handling decision, but does not assume that extreme atmospheric observations are erroneous.
+
+Both pipelines produce PCA, clustering diagnostics, K-means assignments, Ward.D2 hierarchical assignments and cluster-stability comparisons across imputations. The primary workflow also runs the pooled regression specified in the coursework (`CO ~ CO2 + Methane + NitrousOx + CFC11`).
+
+## Key findings in the original coursework report
+
+- The report records an MCAR-test p-value of 0.856. This is a failure to reject the MCAR null hypothesis, not proof that missingness is completely at random.
+- The coursework applies IQR outlier replacement before imputation, resulting in 55 missing cells (35 originally missing plus 20 IQR-flagged observations).
+- The report selects three clusters and reports a K-means between/total sum-of-squares ratio of approximately 75.77%.
+- The report's PCA variance statements are inconsistent: one section reports PC1 at 77% and PC2 at 20.4% (about 97.4% combined), while another says the two retained components explain 85%. The revised script recalculates and exports the eigenvalues rather than choosing one conflicting figure.
+
+These are results reported in the original coursework, not outputs from a verified execution of the revised script.
+
+## Repository structure
+
+```text
+.
+├── R/
+│   └── atmospheric_gas_analysis.R
+├── data/
+│   └── README.md
+├── docs/
+│   ├── ANALYSIS_DECISIONS.md
+│   └── DATA_DICTIONARY.md
+├── outputs/
+│   └── .gitkeep
+├── .gitignore
+└── README.md
+```
+
+## Reproduce the analysis
+
+1. Install R (4.2 or later recommended).
+2. Obtain the dataset from its original authorised source and save it as `data/MaunaLoa_miss.csv`.
+3. Install the required packages:
+
+```r
+install.packages(c(
+  "readr", "dplyr", "tidyr", "ggplot2", "naniar",
+  "mice", "FactoMineR", "factoextra", "cluster"
+))
+```
+
+4. From the repository root, run:
 
 ```r
 source("R/atmospheric_gas_analysis.R")
 ```
 
-The workflow has not been verified end-to-end in this update because the source CSV and an R package lockfile were not available in the repository.
+The script writes tables, plots, cluster assignments and `sessionInfo()` to `outputs/`.
 
-## Limitations and next steps
-- PCA and clustering use the first completed imputed dataset, not pooled results across imputations.
-- MCAR testing does not prove a missingness mechanism.
-- Extreme atmospheric observations may be scientifically meaningful; automatic outlier replacement can remove signal.
-- Temporal structure is not modelled.
-- Future work should compare imputation strategies, assess cluster stability across imputations and model temporal dependence explicitly.
+**Execution status:** the revised script has been committed but has not yet been run in an R environment. Do not cite newly generated metrics until the script has been executed with the authorised input file and its outputs have been inspected.
+
+## Methodological limitations
+
+- MCAR testing does not prove the missingness mechanism.
+- IQR is a univariate screening rule; it does not establish that an observation is an error.
+- PCA and clustering are sensitive to scaling and imputation choices.
+- Cluster labels are descriptive groupings, not validated atmospheric mechanisms or pollution-source categories.
+- The analysis does not account for serial dependence, seasonality or external drivers.
+- Cluster stability across imputations is assessed with adjusted Rand index, but this does not replace external validation or domain interpretation.
+
+See [Analysis decisions](docs/ANALYSIS_DECISIONS.md) and the [data dictionary](docs/DATA_DICTIONARY.md) for more detail.
