@@ -1,6 +1,6 @@
 # Atmospheric Gas Data Analysis: Missing Data, PCA and Clustering
 
-An exploratory multivariate analysis of monthly atmospheric gas measurements from January 2000 to March 2015? No: the supplied source data spans January 2000 to March 2015? 
+An exploratory multivariate analysis of monthly atmospheric gas measurements from January 2000 to March 2015. 
 
 ## Project overview
 
