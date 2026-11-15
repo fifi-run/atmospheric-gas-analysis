@@ -1,56 +1,45 @@
 # Atmospheric Gas Data Analysis: Missing Data, PCA and Clustering
 
 ## Overview
+This coursework project explores a monthly atmospheric-gas dataset with Date and five gas measurements. The submitted report describes 183 observations spanning 2000–2019. The work focuses on data quality, missing-value handling, PCA and unsupervised clustering.
 
-This project analyses a monthly atmospheric-gas dataset containing carbon monoxide (CO), carbon dioxide (CO2), methane, nitrous oxide and CFC-11 measurements. The submitted report describes observations spanning 2000–2019 and focuses on data quality, missing-value handling, dimensionality reduction and unsupervised clustering.
+This is exploratory multivariate analysis. It does **not** implement time-series forecasting or explicitly model temporal autocorrelation.
 
-Although the observations are dated, the supplied analysis does **not** implement a time-series forecasting model or explicitly model temporal autocorrelation. It is best described as exploratory multivariate statistical analysis.
-
-## Research workflow
-
-1. **Exploratory analysis:** inspect types, distributions, pairwise correlations and outliers.
-2. **Outlier review:** apply Tukey's 1.5-IQR rule and replace flagged numeric observations with missing values for subsequent analysis.
-3. **Missingness diagnostics:** inspect patterns and test the MCAR assumption. The report records a p-value of 0.856; this means the test fails to reject MCAR, not that MCAR has been proven.
-4. **Imputation:** use Multiple Imputation by Chained Equations (MICE) with predictive mean matching (PMM), generating ten imputed datasets.
-5. **Dimensionality reduction:** apply PCA and inspect scree plots, loadings and variable contributions.
-6. **Clustering:** compare K-means and hierarchical clustering on PCA coordinates, using three clusters in the reported analysis.
+## Workflow
+1. Explore distributions and pairwise correlations.
+2. Flag potential outliers using Tukey's 1.5-IQR rule. The coursework workflow replaces flagged values with missing values; this is a sensitivity choice requiring scientific justification.
+3. Inspect missingness and run an MCAR diagnostic. The report records p = 0.856; this means the test fails to reject MCAR, not that MCAR has been proven.
+4. Apply MICE with predictive mean matching (PMM), m = 10.
+5. Run PCA and select the number of components reaching at least 85% cumulative variance.
+6. Compare K-means and Ward.D2 hierarchical clustering, with k = 3 retained from the coursework analysis.
 
 ## Findings reported in the coursework
+- 183 observations and six columns (Date plus five gas variables).
+- CO and CO2 are identified as containing missing observations.
+- MCAR-test p-value reported as 0.856.
+- MICE configuration: m = 10, PMM.
+- Three clusters selected; reported K-means between/total sum-of-squares ratio is approximately 75.77%.
 
-- The supplied data file contains **183 observations** and six columns (Date plus five gas variables).
-- The report identifies CO and CO2 as the variables with missing observations.
-- Reported MCAR-test p-value: **0.856**.
-- MICE configuration: **m = 10**, method = **PMM**.
-- The report selects **three clusters**.
-- The reported K-means between-cluster sum-of-squares ratio is approximately **75.77%**.
-
-**PCA reporting discrepancy:** the methods section describes retaining two principal components after reaching at least 85% cumulative variance, while the discussion says that two components explain 97%. These statements should be reconciled against the original PCA output before either is quoted as definitive.
+**PCA discrepancy:** the report's methods section says two components reach at least 85% cumulative variance, while its discussion states 97%. Reconcile these figures against the original PCA output before citing either as definitive.
 
 ## Code and data
+- `R/atmospheric_gas_analysis.R`: cleaned, project-relative workflow. It writes diagnostic tables, PCA eigenvalues, cluster assignments and plots to `outputs/`.
+- `data/README.md`: input provenance and redistribution note.
 
-- R/atmospheric_gas_analysis.R: curated, project-relative R workflow based on the supplied analysis. It makes the cluster-count choice explicit and uses the objects actually created in the script.
-- data/README.md: input data provenance note.
-
-The original MaunaLoa_miss.csv is not included. The supplied archive did not identify its upstream source or redistribution licence. Add an authorised copy at data/MaunaLoa_miss.csv only after confirming that it can be shared.
+The raw CSV is not included because the supplied archive did not establish its exact upstream source or redistribution licence. Add an authorised copy at `data/MaunaLoa_miss.csv` only after confirming permission.
 
 ## Run
+Install R and the packages `readr`, `dplyr`, `naniar`, `mice`, `FactoMineR`, `factoextra` and `cluster`. From the repository root run:
 
-From this project directory, install the packages listed below, place the authorised data file in data/, then run source("R/atmospheric_gas_analysis.R").
+```r
+source("R/atmospheric_gas_analysis.R")
+```
 
-The script has not been executed end-to-end in this documentation pass because the raw data file is not included and a package lockfile was not supplied.
+The workflow has not been verified end-to-end in this update because the source CSV and an R package lockfile were not available in the repository.
 
-## R packages
-
-tidyverse, naniar, ggplot2, corrplot, GGally, FactoMineR, factoextra, cluster, mice, VIM, dendextend, and reshape2.
-
-## Methodological cautions
-
-- The supplied workflow uses the first completed MICE dataset for PCA and clustering rather than pooling clustering/PCA results across imputations.
-- An MCAR test is a diagnostic and does not prove a missingness mechanism.
-- Extreme atmospheric observations may be scientifically meaningful; outlier treatment requires domain validation.
-- The PCA variance statements in the report are inconsistent.
-- A more complete time-series analysis would model temporal structure explicitly and assess cluster stability across imputed datasets.
-
-## Future work
-
-Potential extensions include explicit temporal modelling, sensitivity analysis across imputation strategies, stability analysis across imputations, and adding external covariates such as seasonality or known atmospheric events.
+## Limitations and next steps
+- PCA and clustering use the first completed imputed dataset, not pooled results across imputations.
+- MCAR testing does not prove a missingness mechanism.
+- Extreme atmospheric observations may be scientifically meaningful; automatic outlier replacement can remove signal.
+- Temporal structure is not modelled.
+- Future work should compare imputation strategies, assess cluster stability across imputations and model temporal dependence explicitly.
