@@ -1,106 +1,41 @@
-# Atmospheric gas analysis: exploratory workflow
-# Curated from the submitted coursework script. The input CSV is not bundled
-# because the submitted archive did not document its upstream licence.
-#
-# Expected input: data/MaunaLoa_miss.csv
-# Packages: tidyverse, naniar, mice, FactoMineR, factoextra, corrplot,
-#           GGally, VIM, dendextend, reshape2, cluster
-
-required <- c("tidyverse", "naniar", "mice", "FactoMineR", "factoextra",
-              "corrplot", "GGally", "VIM", "dendextend", "reshape2", "cluster")
-missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
-if (length(missing)) {
-  stop("Install required packages first: ", paste(missing, collapse = ", "))
-}
-
-library(tidyverse)
-library(naniar)
-library(mice)
-library(FactoMineR)
-library(factoextra)
-library(corrplot)
-library(GGally)
-library(VIM)
-library(dendextend)
-library(cluster)
-
-data_path <- file.path("data", "MaunaLoa_miss.csv")
-if (!file.exists(data_path)) {
-  stop("Missing input: ", data_path,
-       ". Obtain an authorised copy and place it in this project data folder.")
-}
-
-df <- readr::read_csv(data_path, show_col_types = FALSE) |>
-  mutate(Date = as.Date(Date))
-
-gas_cols <- setdiff(names(df), "Date")
-numeric_cols <- gas_cols[vapply(df[gas_cols], is.numeric, logical(1))]
-if (length(numeric_cols) < 2L) stop("Expected at least two numeric gas variables.")
-
-gas <- df |> select(all_of(numeric_cols))
-
-# Exploratory summaries and correlation structure
-print(summary(df))
-GGally::ggpairs(gas)
-cor_matrix <- cor(gas, use = "pairwise.complete.obs")
-corrplot::corrplot(cor_matrix, method = "color", type = "upper",
-                   addCoef.col = "grey30", tl.srt = 45)
-
-# Tukey 1.5-IQR outlier flagging. Flagged values are set to NA for the
-# submitted coursework workflow; inspect domain meaning before adopting this.
-flag_tukey <- function(x) {
-  q <- quantile(x, c(0.25, 0.75), na.rm = TRUE)
-  spread <- IQR(x, na.rm = TRUE)
-  which(x < q[1] - 1.5 * spread | x > q[2] + 1.5 * spread)
-}
-
-gas_clean <- gas
-outlier_counts <- vapply(gas_clean, function(x) length(flag_tukey(x)), integer(1))
-print(outlier_counts)
-for (nm in names(gas_clean)) {
-  idx <- flag_tukey(gas_clean[[nm]])
-  if (length(idx)) gas_clean[[nm]][idx] <- NA_real_
-}
-
-# Missingness diagnostics. A non-significant MCAR test does not prove MCAR.
-print(colSums(is.na(gas_clean)))
-print(naniar::mcar_test(gas_clean))
-VIM::aggr(gas_clean, numbers = TRUE, sortVars = TRUE)
-
-# Multiple imputation by predictive mean matching.
-set.seed(123)
-imp <- mice::mice(gas_clean, m = 10, method = "pmm", seed = 123, printFlag = FALSE)
-print(summary(imp))
-
-# The submitted coursework uses one completed dataset for PCA and clustering.
-# This is a simplifying choice; it does not propagate imputation uncertainty.
-completed <- mice::complete(imp, action = 1)
-pca <- FactoMineR::PCA(completed, scale.unit = TRUE, graph = FALSE)
-print(pca$eig)
-factoextra::fviz_eig(pca, addlabels = TRUE)
-factoextra::fviz_pca_biplot(pca, repel = TRUE)
-
-cumulative <- cumsum(pca$eig[, 2])
-n_components <- which(cumulative >= 85)[1]
-message("Components required for >=85% cumulative variance: ", n_components)
-
-pca_coordinates <- as.data.frame(pca$ind$coord[, seq_len(n_components), drop = FALSE])
-
-# The report's selected solution uses k = 3. Inspect WSS/silhouette and stability.
-factoextra::fviz_nbclust(pca_coordinates, stats::kmeans, method = "wss")
-factoextra::fviz_nbclust(pca_coordinates, stats::kmeans, method = "silhouette")
-
-set.seed(123)
-km <- stats::kmeans(pca_coordinates, centers = 3, nstart = 25)
-between_total_pct <- 100 * km$betweenss / km$totss
-message("K-means between/total sum-of-squares (%): ", round(between_total_pct, 2))
-factoextra::fviz_cluster(list(data = pca_coordinates, cluster = km$cluster))
-
-# Hierarchical clustering using Ward's method and the same three-cluster cut.
-hc <- stats::hclust(stats::dist(pca_coordinates), method = "ward.D2")
-hc_cluster <- stats::cutree(hc, k = 3)
-factoextra::fviz_dend(hc, k = 3, rect = TRUE)
-print(table(KMeans = km$cluster, Hierarchical = hc_cluster))
-
-# PCA variance percentages in the submitted report differ between sections.
-# Reconcile those figures against the source outputs before formal reporting.
+# Atmospheric gas exploratory analysis, imputation, PCA and clustering
+# Input: data/MaunaLoa_miss.csv (authorised copy only; see data/README.md).
+# This is exploratory multivariate analysis, not time-series forecasting.
+required <- c("readr","dplyr","naniar","mice","FactoMineR","factoextra","cluster")
+missing <- required[!vapply(required, requireNamespace, logical(1), quietly=TRUE)]
+if(length(missing)) stop("Install packages: ", paste(missing, collapse=", "))
+suppressPackageStartupMessages({library(readr);library(dplyr);library(naniar);library(mice);library(FactoMineR);library(factoextra);library(cluster)})
+input <- file.path("data","MaunaLoa_miss.csv")
+if(!file.exists(input)) stop("Missing ",input,"; review data/README.md.")
+out <- "outputs"; dir.create(out,showWarnings=FALSE,recursive=TRUE)
+raw <- read_csv(input,show_col_types=FALSE)
+if("Date" %in% names(raw)) raw <- raw |> mutate(Date=as.Date(Date))
+x <- raw |> select(where(is.numeric))
+if(ncol(x)<2) stop("At least two numeric gas variables are required.")
+# IQR flags are diagnostic. Replacing flagged observations with NA reproduces
+# the coursework sensitivity choice; it is not asserted to be scientifically optimal.
+flags <- lapply(x,function(v){q<-quantile(v,c(.25,.75),na.rm=TRUE); d<-IQR(v,na.rm=TRUE); !is.na(v)&(v<q[1]-1.5*d|v>q[2]+1.5*d)})
+write.csv(data.frame(variable=names(flags),flagged_n=vapply(flags,sum,integer(1))),file.path(out,"iqr_outlier_flags.csv"),row.names=FALSE)
+for(nm in names(flags)) x[[nm]][flags[[nm]]] <- NA_real_
+write.csv(data.frame(variable=names(x),missing_n=colSums(is.na(x)),missing_pct=round(colMeans(is.na(x))*100,2)),file.path(out,"missingness_summary.csv"),row.names=FALSE)
+# A non-significant MCAR test does not prove MCAR.
+write.csv(as.data.frame(naniar::mcar_test(x)),file.path(out,"mcar_test.csv"),row.names=FALSE)
+set.seed(123); imp <- mice(x,m=10,method="pmm",seed=123,printFlag=FALSE)
+# Keep first completed dataset for coursework comparability; this is not pooled inference.
+completed <- complete(imp,1)
+write.csv(completed,file.path(out,"imputed_dataset_1.csv"),row.names=FALSE)
+pca <- FactoMineR::PCA(completed,scale.unit=TRUE,graph=FALSE)
+eig <- as.data.frame(pca$eig); eig$component <- seq_len(nrow(eig))
+write.csv(eig,file.path(out,"pca_eigenvalues.csv"),row.names=FALSE)
+png(file.path(out,"pca_scree_plot.png"),1200,800,res=140); print(factoextra::fviz_eig(pca,addlabels=TRUE)); dev.off()
+ncomp <- which(cumsum(pca$eig[,2])>=85)[1]; if(is.na(ncomp)) ncomp <- ncol(pca$ind$coord)
+coords <- as.data.frame(pca$ind$coord[,seq_len(ncomp),drop=FALSE])
+# Coursework selected k=3 visually; silhouette is reported as a diagnostic.
+set.seed(123); k <- 3L; km <- kmeans(coords,centers=k,nstart=25)
+sil <- cluster::silhouette(km$cluster,dist(coords))
+write.csv(data.frame(method="kmeans",k=k,between_within_ratio_pct=100*km$betweenss/km$totss,mean_silhouette=mean(sil[,"sil_width"])),file.path(out,"kmeans_summary.csv"),row.names=FALSE)
+write.csv(data.frame(observation=seq_len(nrow(coords)),cluster=km$cluster),file.path(out,"kmeans_assignments.csv"),row.names=FALSE)
+hc <- hclust(dist(coords),method="ward.D2"); groups <- cutree(hc,k=k)
+write.csv(data.frame(observation=seq_len(nrow(coords)),cluster=groups),file.path(out,"hierarchical_assignments.csv"),row.names=FALSE)
+png(file.path(out,"hierarchical_dendrogram.png"),1200,800,res=140); plot(hc,labels=FALSE,main=paste("Ward.D2 clustering, k =",k)); rect.hclust(hc,k=k,border=2:4); dev.off()
+message("Outputs saved to ",out,". PCA/clustering use imputation 1 only; temporal dependence is not modelled.")
